@@ -32,7 +32,7 @@
   {
     estimated-gas: uint,      ;; Estimated gas cost
     timestamp: uint,          ;; Block height when cached
-    expiry-duration: uint     ;; Blocks until cache expires
+    expiry-duration: uint,     ;; Blocks until cache expires
     paymaster: principal      ;; Originating paymaster
   }
 )
@@ -122,83 +122,6 @@
     
     ;; Increment cache entries
     (var-set current-cache-entries (+ current-entries u1))
-    
-    (ok true)
-  )
-)
-
-;; Retrieve cached transaction details
-(define-public (get-cached-transaction 
-  (tx-hash (buff 32))
-  (chain-id uint))
-  (match (map-get? transaction-cache { tx-hash: tx-hash, chain-id: chain-id })
-    entry 
-      (begin
-        ;; Check if cache is still valid
-        (asserts! 
-          (<= (- block-height (get timestamp entry)) (get expiry-duration entry)) 
-          ERR-CACHE-ENTRY-EXPIRED
-        )
-        (ok entry)
-      )
-    (err ERR-CACHE-ENTRY-NOT-FOUND)
-  )
-)
-
-;; Clear a specific cache entry
-(define-public (clear-cache-entry 
-  (tx-hash (buff 32))
-  (chain-id uint))
-  (let (
-    (current-entries (var-get current-cache-entries))
-  )
-    (asserts! (is-admin tx-sender) ERR-NOT-AUTHORIZED)
-    
-    (match (map-get? transaction-cache { tx-hash: tx-hash, chain-id: chain-id })
-      entry 
-        (begin
-          (map-delete transaction-cache { tx-hash: tx-hash, chain-id: chain-id })
-          (var-set current-cache-entries (- current-entries u1))
-          (ok true)
-        )
-      (err ERR-CACHE-ENTRY-NOT-FOUND)
-    )
-  )
-)
-
-;; Bulk clear expired cache entries
-(define-public (clear-expired-entries)
-  (let (
-    (entries-to-delete 
-      (filter 
-        (lambda (entry) 
-          (let (
-            (cached-tx (map-get? transaction-cache entry))
-          )
-            (match cached-tx
-              tx 
-                (> (- block-height (get timestamp tx)) (get expiry-duration tx))
-              false
-            )
-          )
-        )
-        (map-keys transaction-cache)
-      )
-    )
-  )
-    (asserts! (is-admin tx-sender) ERR-NOT-AUTHORIZED)
-    
-    (fold 
-      (lambda (entry result)
-        (begin
-          (map-delete transaction-cache entry)
-          (var-set current-cache-entries (- (var-get current-cache-entries) u1))
-          result
-        )
-      )
-      entries-to-delete
-      true
-    )
     
     (ok true)
   )
